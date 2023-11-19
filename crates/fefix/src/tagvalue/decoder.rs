@@ -187,6 +187,7 @@ where
             .unwrap();
         let fix_type = self.tag_lookup.get(&tag.get());
         if fix_type == Some(&FixDatatype::NumInGroup) {
+            println!("Adding a field for tag: {} and field value: {:?}", tag, field_value);
             self.builder
                 .state
                 .add_group(tag, self.builder.field_locators.len() - 1, field_value);
@@ -326,6 +327,11 @@ where
     }
 
     fn entry(&self, i: usize) -> Self::Entry {
+        let entry_index: u32 = i.try_into().unwrap();
+        // println!("{:?}", self.message.builder);
+        // panic!();
+        println!("This is i being used for entry: {}", i);
+        println!("This is the index of group tag {} and the entry index {}", self.index_of_group_tag, entry_index);
         Message {
             builder: self.message.builder,
             phantom: PhantomData::default(),
@@ -580,23 +586,52 @@ where
     type Group = MessageGroup<'a, T>;
 
     fn group_opt(&self, tag: &u32) -> Option<Result<Self::Group, <usize as FixValue>::Error>> {
+        println!("Entering group opt now");
         let tag = TagU16::new(u16::try_from(*tag).ok()?)?;
+        println!("Got tag as {:?}", tag);
+
+        // my somewhat hacky fix
+        let mut context = FieldLocatorContext::TopLevel;
+        let mut number_of_elems_in_group = 0;
+        let mut index_of_group_tag = 0; // temp value
+        for decoder_group_state in &self.builder.state.group_information {
+            if decoder_group_state.first_tag_of_every_group_entry == tag {
+                number_of_elems_in_group = decoder_group_state.num_entries;
+                index_of_group_tag = decoder_group_state.index_of_group_tag as u32;
+                context = FieldLocatorContext::WithinGroup {
+                    index_of_group_tag: decoder_group_state.index_of_group_tag as u32,
+                    entry_index: decoder_group_state.current_entry_i as u32,
+                };
+                println!("Got context as {:?}", context);
+            }
+        };
+
         let field_locator_of_group_tag = FieldLocator {
             tag,
-            context: self.field_locator_context,
+            context: context,
         };
+
+        println!("Got field location as {:?}", field_locator_of_group_tag);
+        // println!("num in group is: {:?}", self.builder.fields.get(&field_locator_of_group_tag));
         let num_in_group = self.builder.fields.get(&field_locator_of_group_tag)?;
-        let index_of_group_tag = num_in_group.2 as u32;
-        let field_value_str = std::str::from_utf8(num_in_group.1).ok()?;
-        let num_entries = str::parse(field_value_str).unwrap();
+        println!("Got num in group as {:?}", num_in_group);
+        // println!("This is the message builder: {:?}\n", self.builder);
+        // println!("This is the decoder_state: {:?}\n", self.builder.state);
+        // let index_of_group_tag = num_in_group.2 as u32; // todo this is where it wrongly gets set to 31
+
+        // this stupid field_value_str that gets parsed to very incorrect give 'num_entries'
+        // actually gives me the Security_Id actual value that I want lol
+        let field_value_str = std::str::from_utf8(num_in_group.1).ok()?;// THIS DOESN'T GIVE NUM_ENTRIES, IT JUST GIVES THE VALUE OF WHAT THE BYTES REPRESENT, E.G. THE SECURITY_ALT_ID, BECAUSE IT IS IN FACT JUST DECODING THE BYTES
+        // println!("This is the field value str {}", field_value_str);
+        let num_entries: String = str::parse(field_value_str).ok()?; // wtf is the difference between num in group and num entries lol
         Some(Ok(MessageGroup {
             message: Message {
                 builder: self.builder,
                 phantom: PhantomData::default(),
-                field_locator_context: FieldLocatorContext::TopLevel,
+                field_locator_context: context, // this used to be just TopLevel, changed it to the variable context as part of my hacky fix
             },
             index_of_group_tag,
-            len: num_entries,
+            len: number_of_elems_in_group,
         }))
     }
 
@@ -606,6 +641,7 @@ where
             tag,
             context: self.field_locator_context,
         };
+        println!("This is the field locator for fv_raw: {:?}", field_locator); // todo the reason we're getting None is because the field with index_of_group_tag = 31 DOES NOT EXIST
         self.builder.fields.get(&field_locator).map(|field| field.1)
     }
 }

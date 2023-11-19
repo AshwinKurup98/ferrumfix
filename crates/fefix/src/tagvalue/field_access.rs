@@ -142,7 +142,9 @@ where
             None
         } else {
             let entry = self.group.entry(self.i);
+            println!("Value of i is increasing from {}", self.i);
             self.i += 1;
+            print!("toooooo {}", self.i);
             Some(entry)
         }
     }
