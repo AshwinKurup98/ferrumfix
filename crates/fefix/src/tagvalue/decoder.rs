@@ -34,6 +34,20 @@ where
     /// Creates a new [`Decoder`] for the tag-value format. `dict` is used to parse
     /// messages.
     pub fn new(dict: Dictionary) -> Self {
+
+        let tempplsdelete: IntMap<u16, FixDatatype> = dict
+            .iter_fields()
+            .filter_map(|field| {
+                let fix_type = field.data_type().basetype();
+                if fix_type == FixDatatype::Length || fix_type == FixDatatype::NumInGroup {
+                    Some((field.tag().get(), fix_type))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        println!("{:?}" , tempplsdelete);
         Self {
             builder: MessageBuilder::default(),
             raw_decoder: RawDecoder::default(),
@@ -167,16 +181,29 @@ where
     ) {
         let config_assoc = self.config().should_decode_associative();
         let field_value = &raw_message[field_value_start..][..field_value_len];
-        if self.builder.state.new_group.is_some() {
+        if self.builder.state.new_group.is_some() { // the new_group would be made in the previous iteration of store_field
             // We are entering a new group, but we still don't know which tag
             // will be the first one in each entry.
             self.builder.state.set_new_group(tag);
+
+            // todo note that 'group_info' is a weird way to call it
+            // it's more like a 'group_currently_being_parsed' cache thing
         } else if let Some(group_info) = self.builder.state.group_information.last_mut() {
+            println!("This is the current entry i {} and this the num entries {}", group_info.current_entry_i, group_info.num_entries);
+
+            // TODO because 455 is the last group in my message, neither of the conditionals below runs, meaning also that
+            // the first if conditional is never allowed to run, therefore, the group_information is always allowed to exist
+            // therefore due to the function called current_field_locator, we will always set to WithinGroup
+
+            // this is not brilliant.
+            // they use the group_info as a cache to see if there's a group currently being parsed (therefore they pop). but they also use it as a persistent store of value to check if a group exists later.
+            // naivest thing to do is to make a separate cache to parse group info during the building phase.
             if group_info.current_entry_i >= group_info.num_entries {
                 self.builder.state.group_information.pop();
             } else if tag == group_info.first_tag_of_every_group_entry {
                 group_info.current_entry_i += 1;
             }
+
         }
         self.message_builder_mut()
             .add_field(
@@ -457,15 +484,19 @@ impl DecoderState {
         FieldLocator {
             tag,
             context: match self.group_information.last() {
-                Some(group_info) => FieldLocatorContext::WithinGroup {
-                    index_of_group_tag: group_info.index_of_group_tag as u32,
-                    entry_index: group_info.current_entry_i as u32,
+                Some(group_info) => {
+                    println!("Returned {:?} (index group tag) as group information last, for tag {}, therefore WE SET TO WITHINGROUP", group_info.index_of_group_tag, tag);
+                    FieldLocatorContext::WithinGroup {
+                        index_of_group_tag: group_info.index_of_group_tag as u32,
+                        entry_index: group_info.current_entry_i as u32,
+                    }
                 },
                 None => FieldLocatorContext::TopLevel,
             },
         }
     }
 
+    // todo change the name for this pls, we're just purely pushing a group created in the previous iteration to group_iteration
     fn set_new_group(&mut self, tag: TagU16) {
         assert!(self.new_group.is_some());
         let new_group = self.new_group.take().unwrap();
@@ -480,6 +511,7 @@ impl DecoderState {
     fn add_group(&mut self, tag: TagU16, index_of_group_tag: usize, field_value: &[u8]) {
         let field_value_str = std::str::from_utf8(field_value).unwrap();
         let num_entries = str::parse(field_value_str).unwrap();
+        println!("Inside the add_group method for tag {}, setting the num_entries to {}", tag, num_entries);
         if num_entries > 0 {
             self.new_group = Some(DecoderStateNewGroup {
                 tag,
