@@ -188,7 +188,16 @@ where
 
             // todo note that 'group_info' is a weird way to call it
             // it's more like a 'group_currently_being_parsed' cache thing
-        } else if let Some(group_info) = self.builder.state.group_information.last_mut() {
+        }
+        self.message_builder_mut()
+            .add_field( // this calls current_field_locator, thus depends on group information.last()
+                tag,
+                &raw_message[field_value_start..][..field_value_len],
+                config_assoc,
+            )
+            .unwrap();
+
+        if let Some(group_info) = self.builder.state.group_information.last_mut() {
             println!("This is the current entry i {} and this the num entries {}", group_info.current_entry_i, group_info.num_entries);
 
             // TODO because 455 is the last group in my message, neither of the conditionals below runs, meaning also that
@@ -205,13 +214,8 @@ where
             }
 
         }
-        self.message_builder_mut()
-            .add_field(
-                tag,
-                &raw_message[field_value_start..][..field_value_len],
-                config_assoc,
-            )
-            .unwrap();
+
+
         let fix_type = self.tag_lookup.get(&tag.get());
         if fix_type == Some(&FixDatatype::NumInGroup) {
             println!("Adding a field for tag: {} and field value: {:?}", tag, field_value);
@@ -475,6 +479,7 @@ struct DecoderStateNewGroup {
 #[derive(Debug, Clone)]
 struct DecoderState {
     group_information: Vec<DecoderGroupState>,
+    persistent_group_information: Vec<DecoderGroupState>,
     new_group: Option<DecoderStateNewGroup>,
     data_field_length: Option<usize>,
 }
@@ -501,6 +506,12 @@ impl DecoderState {
         assert!(self.new_group.is_some());
         let new_group = self.new_group.take().unwrap();
         self.group_information.push(DecoderGroupState {
+            first_tag_of_every_group_entry: tag,
+            num_entries: new_group.num_entries,
+            current_entry_i: 0,
+            index_of_group_tag: new_group.index_of_group_tag,
+        });
+        self.persistent_group_information.push(DecoderGroupState {
             first_tag_of_every_group_entry: tag,
             num_entries: new_group.num_entries,
             current_entry_i: 0,
@@ -542,6 +553,7 @@ impl<'a> Default for MessageBuilder<'a> {
         Self {
             state: DecoderState {
                 group_information: Vec::new(),
+                persistent_group_information: Vec::new(),
                 new_group: None,
                 data_field_length: None,
             },
@@ -626,7 +638,7 @@ where
         let mut context = FieldLocatorContext::TopLevel;
         let mut number_of_elems_in_group = 0;
         let mut index_of_group_tag = 0; // temp value
-        for decoder_group_state in &self.builder.state.group_information {
+        for decoder_group_state in &self.builder.state.persistent_group_information {
             if decoder_group_state.first_tag_of_every_group_entry == tag {
                 number_of_elems_in_group = decoder_group_state.num_entries;
                 index_of_group_tag = decoder_group_state.index_of_group_tag as u32;
