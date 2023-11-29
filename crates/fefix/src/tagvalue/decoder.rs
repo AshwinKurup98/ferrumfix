@@ -167,21 +167,15 @@ where
     ) {
         let config_assoc = self.config().should_decode_associative();
         let field_value = &raw_message[field_value_start..][..field_value_len];
+        let mut first_ever_element_seen_in_group = false;
         if self.builder.state.new_group.is_some() { // the new_group would be made in the previous iteration of store_field
             // We are entering a new group, but we still don't know which tag
             // will be the first one in each entry.
             self.builder.state.set_new_group(tag);
-
+            first_ever_element_seen_in_group = true;
             // todo note that 'group_info' is a weird way to call it
             // it's more like a 'group_currently_being_parsed' cache thing
         }
-        self.message_builder_mut()
-            .add_field( // this calls current_field_locator, thus depends on group information.last()
-                tag,
-                &raw_message[field_value_start..][..field_value_len],
-                config_assoc,
-            )
-            .unwrap();
 
         if let Some(group_info) = self.builder.state.group_information.last_mut() {
 
@@ -195,13 +189,30 @@ where
             if group_info.current_entry_i >= group_info.num_entries {
                 self.builder.state.group_information.pop();
             } else if tag == group_info.first_tag_of_every_group_entry {
-                group_info.current_entry_i += 1;
+                println!("Now increasing the current_entry_i from {}, and the tag is: {}", group_info.current_entry_i, group_info.first_tag_of_every_group_entry);
+
+                // If I have tags [10, 11, 12, 13, 14, 10, 11, 12, 13, 14, 10...], and 10 is the first tag of every group entry
+                // (this is similar to orderbook groups), then I don't want the current_entry_i to increase right after seeing the first '10'.
+                // this is because i'd want the first slice [10, 11, 12, 13, 14] to be in the same group with entry_i as 0.
+                // Otherwise, only the first '10' would have entry_i as 0, and then the 11, 12, 13, 14, which were meant to be it's groupmates, would have entry_i as 1.
+                if !first_ever_element_seen_in_group {
+                    group_info.current_entry_i += 1;
+                }
             }
 
         }
 
+        self.message_builder_mut()
+            .add_field( // this calls current_field_locator, thus depends on group information.last()
+                        tag,
+                        &raw_message[field_value_start..][..field_value_len],
+                        config_assoc,
+            )
+            .unwrap();
+
 
         let fix_type = self.tag_lookup.get(&tag.get());
+        println!("fix_type is {:?} and tag is {:?}", fix_type, tag);
         if fix_type == Some(&FixDatatype::NumInGroup) {
 
             self.builder
@@ -565,6 +576,7 @@ impl<'a> MessageBuilder<'a> {
         associative: bool,
     ) -> Result<(), DecodeError> {
         let field_locator = self.state.current_field_locator(tag);
+        println!("Adding field locator as: {:?}", field_locator);
         let i = self.field_locators.len();
         if associative {
             self.fields.insert(field_locator, (tag, field_value, i));
@@ -619,6 +631,7 @@ where
         let mut context = FieldLocatorContext::TopLevel;
         let mut number_of_elems_in_group = 0;
         let mut index_of_group_tag = 0; // temp value
+        // println!("{:?}", self.builder);
         for decoder_group_state in &self.builder.state.persistent_group_information {
             if decoder_group_state.first_tag_of_every_group_entry == tag {
                 number_of_elems_in_group = decoder_group_state.num_entries;
@@ -634,6 +647,8 @@ where
             tag,
             context: context,
         };
+
+        println!("This is the field locator of group tag: {:?}", field_locator_of_group_tag);
 
 
         // println!("num in group is: {:?}", self.builder.fields.get(&field_locator_of_group_tag));
