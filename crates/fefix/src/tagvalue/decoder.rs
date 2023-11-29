@@ -189,7 +189,7 @@ where
             if group_info.current_entry_i >= group_info.num_entries {
                 self.builder.state.group_information.pop();
             } else if tag == group_info.first_tag_of_every_group_entry {
-                println!("Now increasing the current_entry_i from {}, and the tag is: {}", group_info.current_entry_i, group_info.first_tag_of_every_group_entry);
+                // println!("Now increasing the current_entry_i from {}, and the tag is: {}", group_info.current_entry_i, group_info.first_tag_of_every_group_entry);
 
                 // If I have tags [10, 11, 12, 13, 14, 10, 11, 12, 13, 14, 10...], and 10 is the first tag of every group entry
                 // (this is similar to orderbook groups), then I don't want the current_entry_i to increase right after seeing the first '10'.
@@ -212,7 +212,7 @@ where
 
 
         let fix_type = self.tag_lookup.get(&tag.get());
-        println!("fix_type is {:?} and tag is {:?}", fix_type, tag);
+        // println!("fix_type is {:?} and tag is {:?}", fix_type, tag);
         if fix_type == Some(&FixDatatype::NumInGroup) {
 
             self.builder
@@ -576,7 +576,7 @@ impl<'a> MessageBuilder<'a> {
         associative: bool,
     ) -> Result<(), DecodeError> {
         let field_locator = self.state.current_field_locator(tag);
-        println!("Adding field locator as: {:?}", field_locator);
+        // println!("Adding field locator as: {:?}", field_locator);
         let i = self.field_locators.len();
         if associative {
             self.fields.insert(field_locator, (tag, field_value, i));
@@ -631,7 +631,7 @@ where
         let mut context = FieldLocatorContext::TopLevel;
         let mut number_of_elems_in_group = 0;
         let mut index_of_group_tag = 0; // temp value
-        println!("{:?}", self.builder);
+        // println!("{:?}", self.builder);
         for decoder_group_state in &self.builder.state.persistent_group_information {
             if decoder_group_state.first_tag_of_every_group_entry == tag {
                 number_of_elems_in_group = decoder_group_state.num_entries;
@@ -648,7 +648,7 @@ where
             context: context,
         };
 
-        println!("This is the field locator of group tag: {:?}", field_locator_of_group_tag);
+        // println!("This is the field locator of group tag: {:?}", field_locator_of_group_tag);
 
 
         // println!("num in group is: {:?}", self.builder.fields.get(&field_locator_of_group_tag));
@@ -680,7 +680,7 @@ where
             tag,
             context: self.field_locator_context,
         };
-        println!("This is the field locator from fv_raw {:?}", field_locator);
+        // println!("This is the field locator from fv_raw {:?}", field_locator);
         self.builder.fields.get(&field_locator).map(|field| field.1)
     }
 }
