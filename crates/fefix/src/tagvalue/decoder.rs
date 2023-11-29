@@ -631,7 +631,7 @@ where
         let mut context = FieldLocatorContext::TopLevel;
         let mut number_of_elems_in_group = 0;
         let mut index_of_group_tag = 0; // temp value
-        // println!("{:?}", self.builder);
+        println!("{:?}", self.builder);
         for decoder_group_state in &self.builder.state.persistent_group_information {
             if decoder_group_state.first_tag_of_every_group_entry == tag {
                 number_of_elems_in_group = decoder_group_state.num_entries;
@@ -680,7 +680,7 @@ where
             tag,
             context: self.field_locator_context,
         };
-
+        println!("This is the field locator from fv_raw {:?}", field_locator);
         self.builder.fields.get(&field_locator).map(|field| field.1)
     }
 }
