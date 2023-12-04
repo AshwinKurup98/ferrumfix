@@ -176,7 +176,6 @@ where
             // todo note that 'group_info' is a weird way to call it
             // it's more like a 'group_currently_being_parsed' cache thing
         }
-
         if let Some(group_info) = self.builder.state.group_information.last_mut() {
 
             // TODO because 455 is the last group in my message, neither of the conditionals below runs, meaning also that
