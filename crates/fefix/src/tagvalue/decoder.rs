@@ -168,27 +168,14 @@ where
         let config_assoc = self.config().should_decode_associative();
         let field_value = &raw_message[field_value_start..][..field_value_len];
         let mut first_ever_element_seen_in_group = false;
-        if self.builder.state.new_group.is_some() { // the new_group would be made in the previous iteration of store_field
-            // We are entering a new group, but we still don't know which tag
-            // will be the first one in each entry.
+        if self.builder.state.new_group.is_some() {
             self.builder.state.set_new_group(tag);
             first_ever_element_seen_in_group = true;
-            // todo note that 'group_info' is a weird way to call it
-            // it's more like a 'group_currently_being_parsed' cache thing
         }
         if let Some(group_info) = self.builder.state.group_information.last_mut() {
-
-            // TODO because 455 is the last group in my message, neither of the conditionals below runs, meaning also that
-            // the first if conditional is never allowed to run, therefore, the group_information is always allowed to exist
-            // therefore due to the function called current_field_locator, we will always set to WithinGroup
-
-            // this is not brilliant.
-            // they use the group_info as a cache to see if there's a group currently being parsed (therefore they pop). but they also use it as a persistent store of value to check if a group exists later.
-            // naivest thing to do is to make a separate cache to parse group info during the building phase.
             if group_info.current_entry_i >= group_info.num_entries {
                 self.builder.state.group_information.pop();
             } else if tag == group_info.first_tag_of_every_group_entry {
-                // println!("Now increasing the current_entry_i from {}, and the tag is: {}", group_info.current_entry_i, group_info.first_tag_of_every_group_entry);
 
                 // If I have tags [10, 11, 12, 13, 14, 10, 11, 12, 13, 14, 10...], and 10 is the first tag of every group entry
                 // (this is similar to orderbook groups), then I don't want the current_entry_i to increase right after seeing the first '10'.
@@ -202,7 +189,7 @@ where
         }
 
         self.message_builder_mut()
-            .add_field( // this calls current_field_locator, thus depends on group information.last()
+            .add_field(
                         tag,
                         &raw_message[field_value_start..][..field_value_len],
                         config_assoc,
@@ -211,7 +198,6 @@ where
 
 
         let fix_type = self.tag_lookup.get(&tag.get());
-        // println!("fix_type is {:?} and tag is {:?}", fix_type, tag);
         if fix_type == Some(&FixDatatype::NumInGroup) {
 
             self.builder
@@ -354,8 +340,6 @@ where
 
     fn entry(&self, i: usize) -> Self::Entry {
         let entry_index: u32 = i.try_into().unwrap();
-        // println!("{:?}", self.message.builder);
-        // panic!();
         Message {
             builder: self.message.builder,
             phantom: PhantomData::default(),
@@ -575,7 +559,6 @@ impl<'a> MessageBuilder<'a> {
         associative: bool,
     ) -> Result<(), DecodeError> {
         let field_locator = self.state.current_field_locator(tag);
-        // println!("Adding field locator as: {:?}", field_locator);
         let i = self.field_locators.len();
         if associative {
             self.fields.insert(field_locator, (tag, field_value, i));
@@ -629,8 +612,7 @@ where
         // my somewhat hacky fix
         let mut context = FieldLocatorContext::TopLevel;
         let mut number_of_elems_in_group = 0;
-        let mut index_of_group_tag = 0; // temp value
-        // println!("{:?}", self.builder);
+        let mut index_of_group_tag = 0;
         for decoder_group_state in &self.builder.state.persistent_group_information {
             if decoder_group_state.first_tag_of_every_group_entry == tag {
                 number_of_elems_in_group = decoder_group_state.num_entries;
@@ -647,26 +629,15 @@ where
             context: context,
         };
 
-        // println!("This is the field locator of group tag: {:?}", field_locator_of_group_tag);
-
-
-        // println!("num in group is: {:?}", self.builder.fields.get(&field_locator_of_group_tag));
         let num_in_group = self.builder.fields.get(&field_locator_of_group_tag)?;
 
-        // println!("This is the message builder: {:?}\n", self.builder);
-        // println!("This is the decoder_state: {:?}\n", self.builder.state);
-        // let index_of_group_tag = num_in_group.2 as u32; // todo this is where it wrongly gets set to 31
-
-        // this stupid field_value_str that gets parsed to very incorrect give 'num_entries'
-        // actually gives me the Security_Id actual value that I want lol
-        let field_value_str = std::str::from_utf8(num_in_group.1).ok()?;// THIS DOESN'T GIVE NUM_ENTRIES, IT JUST GIVES THE VALUE OF WHAT THE BYTES REPRESENT, E.G. THE SECURITY_ALT_ID, BECAUSE IT IS IN FACT JUST DECODING THE BYTES
-        // println!("This is the field value str {}", field_value_str);
-        let num_entries: String = str::parse(field_value_str).ok()?; // wtf is the difference between num in group and num entries lol
+        let field_value_str = std::str::from_utf8(num_in_group.1).ok()?;
+        let num_entries: String = str::parse(field_value_str).ok()?;
         Some(Ok(MessageGroup {
             message: Message {
                 builder: self.builder,
                 phantom: PhantomData::default(),
-                field_locator_context: context, // this used to be just TopLevel, changed it to the variable context as part of my hacky fix
+                field_locator_context: context,
             },
             index_of_group_tag,
             len: number_of_elems_in_group,
@@ -679,7 +650,6 @@ where
             tag,
             context: self.field_locator_context,
         };
-        // println!("This is the field locator from fv_raw {:?}", field_locator);
         self.builder.fields.get(&field_locator).map(|field| field.1)
     }
 }
