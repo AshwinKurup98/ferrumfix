@@ -477,7 +477,6 @@ impl DecoderState {
         }
     }
 
-    // todo change the name for this pls, we're just purely pushing a group created in the previous iteration to group_iteration
     fn set_new_group(&mut self, tag: TagU16) {
         assert!(self.new_group.is_some());
         let new_group = self.new_group.take().unwrap();
